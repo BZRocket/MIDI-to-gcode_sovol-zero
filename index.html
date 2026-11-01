@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MIDI → Printer Gcode (Sovol Zero)</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--ac:#2563eb;--bad:#c62828;--ok:#2e7d32}
+@media(prefers-color-scheme:dark){:root{--bg:#18181b;--fg:#ececf0;--mut:#9a9aa3;--card:#232328;--bd:#3a3a42;--ac:#6ea0ff;--bad:#ff6b6b;--ok:#6fcf80}}
+body{font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:960px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin:12px 0}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 14px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mut)}
+input,select,button{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
+button{background:var(--ac);color:#fff;border:0;cursor:pointer;margin:4px 6px 4px 0}button.s{background:var(--bd);color:var(--fg)}button:disabled{opacity:.4;cursor:not-allowed}
+.row{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center;margin:6px 0}
+.bad{color:var(--bad)}.ok{color:var(--ok)}.m{color:var(--mut);font-size:12px}canvas{border:1px solid var(--bd);border-radius:8px;background:var(--bg);max-width:100%}
+</style></head><body>
+<h1>MIDI → Printer Gcode <span class="m">Sovol Zero (Klipper, CoreXY)</span></h1>
+<p class="m">Each motor plays one monophonic line: Motor A (stepper_x), Motor B (stepper_y), Z motor. Runs fully offline in your browser.</p>
+
+<div class="card"><h2>1 · MIDI file</h2><input type="file" id="file" accept=".mid,.midi"> <span id="finfo" class="m"></span></div>
+
+<div class="card"><h2>2 · Channel assignment</h2>
+<div class="row"><b>Motor A (X+Y)</b><select id="s0"></select></div>
+<div class="row"><b>Motor B (X−Y)</b><select id="s1"></select></div>
+<div class="row"><b>Z motor</b><select id="s2"></select></div>
+<div class="row"><b>Chords</b><select id="mode"><option value="high">Keep highest note</option><option value="low">Keep lowest note</option><option value="new">Keep newest note</option></select></div></div>
+
+<div class="card"><h2>3 · Settings</h2><div class="g">
+<label>Playback speed ×<input id="speed" type="number" value="1" step="0.1"></label>
+<label>Transpose (semitones)<input id="tr" type="number" value="0" step="1"></label>
+<label>Center X (mm)<input id="cx" type="number" value="76"></label>
+<label>Center Y (mm)<input id="cy" type="number" value="76"></label>
+<label>XY half-range (mm)<input id="half" type="number" value="40"></label>
+<label>Z center height (mm)<input id="zc" type="number" value="40"></label>
+<label>Z half-range (mm)<input id="zh" type="number" value="8"></label>
+<label>Acceleration (mm/s²)<input id="acc" type="number" value="5000"></label>
+<label>Max motor speed A/B (mm/s)<input id="vmax" type="number" value="250"></label>
+<label>mm per Hz, A/B (pitch scale)<input id="sxy" type="number" value="0.2" step="0.005"></label>
+<label>mm per Hz, Z (pitch scale)<input id="sz" type="number" value="0.02" step="0.001"></label>
+<label>Lowest note (Hz)<input id="fmin" type="number" value="40"></label>
+<label>Time grid (ms)<input id="grid" type="number" value="10"></label>
+<label>Home first (G28)<select id="home"><option value="1">Yes</option><option value="0">No (already homed)</option></select></label>
+</div>
+<p class="m">Pitch scale defaults = rotation_distance ÷ 200 full steps (0.2 mm; Z 0.02 mm). Use the calibration tones to check by ear and tune. Notes outside a motor's range are folded by octaves.</p></div>
+
+<div class="card"><h2>4 · Generate</h2>
+<button id="gen" disabled>Generate gcode</button><label style="display:inline-flex;vertical-align:middle">Cal. tone Hz<input id="calf" type="number" value="440" style="width:90px"></label>
+<button id="cal" class="s">Calibration tones (A, B, Z, all)</button>
+<div id="out"></div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const P={maxVel:1200,maxAccel:40000,mcr:0.5,scv:5,maxZv:20,hard:[15,137],zHard:[10,100]}; // from printer.cfg + hard safety margins
+let SRC=[],G='';
+const hz=k=>440*2**((k-69)/12);
+function fold(f,lo,hi){while(f>hi)f/=2;while(f<lo)f*=2;return f>hi?0:f}
+
+function parseMidi(buf){const u=new Uint8Array(buf),d=new DataView(buf);let p=0;
+ const s4=()=>{const r=String.fromCharCode(u[p],u[p+1],u[p+2],u[p+3]);p+=4;return r};
+ if(s4()!=='MThd')throw Error('Not a MIDI file');p+=4;p+=2;const nt=d.getUint16(p);p+=2;const div=d.getUint16(p);p+=2;
+ if(div&0x8000)throw Error('SMPTE timing not supported');
+ const ev=[],tm=[[0,500000]],names={};
+ for(let t=0;t<nt;t++){if(s4()!=='MTrk')throw Error('Bad track');const len=d.getUint32(p);p+=4;const end=p+len;let tick=0,rs=0;
+  const vlq=()=>{let v=0,b;do{b=u[p++];v=(v<<7)|(b&127)}while(b&128);return v};
+  while(p<end){tick+=vlq();let st=u[p];if(st<128)st=rs;else{p++;if(st<0xF0)rs=st}
+   if(st===0xFF){const ty=u[p++],l=vlq();if(ty===0x51)tm.push([tick,(u[p]<<16)|(u[p+1]<<8)|u[p+2]]);if(ty===3&&!names[t])names[t]=String.fromCharCode(...u.slice(p,p+l));p+=l}
+   else if(st===0xF0||st===0xF7)p+=vlq();
+   else{const hi=st&0xF0,ch=st&15,a=u[p++],b=(hi===0xC0||hi===0xD0)?0:u[p++];if(hi===0x90||hi===0x80)ev.push({tick,ch,t,k:a,on:hi===0x90&&b>0})}}
+  p=end}
+ tm.sort((a,b)=>a[0]-b[0]);const seg=[];let sec=0;
+ for(let i=0;i<tm.length;i++){seg.push([tm[i][0],sec,tm[i][1]]);if(i+1<tm.length)sec+=(tm[i+1][0]-tm[i][0])*tm[i][1]/1e6/div}
+ const sec_=tick=>{let s=seg[0];for(const x of seg)if(x[0]<=tick)s=x;return s[1]+(tick-s[0])*s[2]/1e6/div};
+ const map={},open={};
+ for(const e of ev){const id=e.t+':'+e.ch,k=id+':'+e.k;map[id]=map[id]||{id,t:e.t,ch:e.ch,notes:[]};
+  if(e.on){open[k]=e.tick}else if(open[k]!==undefined){map[id].notes.push({s:sec_(open[k]),e:sec_(e.tick),k:e.k});delete open[k]}}
+ return Object.values(map).filter(s=>s.notes.length).map(s=>{const ks=s.notes.map(n=>n.k);
+  s.label=`Track ${s.t}${names[s.t]?' “'+names[s.t]+'”':''} · ch ${s.ch+1}${s.ch===9?' (drums)':''} · ${s.notes.length} notes · ${Math.min(...ks)}–${Math.max(...ks)}`;return s})}
+
+function timeline(notes,c,z){const sc=z?c.sz:c.sxy,fmax=z?0.9*P.maxZv/c.sz:c.vmax/c.sxy,q=t=>Math.round(t/c.grid)*c.grid;
+ const ns=notes.map(n=>({s:q(n.s/c.speed),e:q(n.e/c.speed),f:fold(hz(n.k+c.tr),c.fmin,fmax)})).filter(n=>n.e>n.s&&n.f>0).sort((a,b)=>a.s-b.s);
+ const bs=[...new Set(ns.flatMap(n=>[n.s,n.e]))].sort((a,b)=>a-b),out=[];let i=0,act=[];
+ for(let k=0;k<bs.length-1;k++){const t=bs[k];while(i<ns.length&&ns[i].s<=t)act.push(ns[i++]);act=act.filter(n=>n.e>t);
+  let f=0;if(act.length){let b=act[0];for(const n of act)if(c.mode==='high'?n.f>b.f:c.mode==='low'?n.f<b.f:n.s>=b.s)b=n;f=b.f}
+  out.push({t0:t,t1:bs[k+1],f})}
+ return out}
+function merge(tls){const bs=[...new Set([0,...tls.flatMap(t=>t.flatMap(s=>[s.t0,s.t1]))])].sort((a,b)=>a-b),ptr=[0,0,0],iv=[];
+ for(let k=0;k<bs.length-1;k++){const t0=bs[k],t1=bs[k+1],m=(t0+t1)/2;
+  iv.push({t0,t1,f:tls.map((tl,i)=>{while(ptr[i]<tl.length&&tl[ptr[i]].t1<=m)ptr[i]++;const s=tl[ptr[i]];return s&&s.t0<=m?s.f:0})})}
+ return iv}
+
+// Motor space (relative to center): A=x+y, B=x-y, Z. Each motor bounces inside its own box, so the toolhead always stays inside the XY envelope.
+function emit(iv,c){const W=[c.half,c.half,c.zh],S=[c.sxy,c.sxy,c.sz],pos=[0,0,0],dir=[1,1,1],L=[];
+ const xyz=p=>[+(c.cx+(p[0]+p[1])/2).toFixed(3),+(c.cy+(p[0]-p[1])/2).toFixed(3),+(c.zc+p[2]).toFixed(3)];
+ let prev=xyz(pos),dwell=0;const flush=()=>{if(dwell>0.0005){L.push('G4 P'+Math.round(dwell*1000));dwell=0}};
+ for(const s of iv){let rem=s.t1-s.t0;const v=s.f.map((f,i)=>f*S[i]);
+  if(!v.some(x=>x>0)){dwell+=rem;continue}flush();let g=0;
+  while(rem>1e-4&&g++<200000){let d=rem;
+   v.forEach((x,i)=>{if(!x)return;const rm=()=>dir[i]>0?W[i]-pos[i]:W[i]+pos[i];let room=rm();if(room<x*0.02){dir[i]*=-1;room=rm()}d=Math.min(d,room/x)});
+   v.forEach((x,i)=>{pos[i]+=dir[i]*x*d});
+   const n=xyz(pos),dist=Math.hypot(n[0]-prev[0],n[1]-prev[1],n[2]-prev[2]);
+   if(dist>=1e-3)L.push(`G1 X${n[0]} Y${n[1]} Z${n[2]} F${Math.round(dist/d*60)}`);
+   prev=n;rem-=d}}
+ flush();return L}
+function build(iv,c,title){const H=['; '+title,'; Sovol Zero / Klipper. No heaters, no extrusion. BED MUST BE CLEAR.',
+ `; Envelope X ${c.cx-c.half}..${c.cx+c.half} Y ${c.cy-c.half}..${c.cy+c.half} Z ${c.zc-c.zh}..${c.zc+c.zh}`,'G90'];
+ if(c.home)H.push('G28');
+ H.push(`SET_VELOCITY_LIMIT VELOCITY=${Math.round(c.vmax*1.2)} ACCEL=${c.acc}`,`G1 Z${c.zc} F600`,`G1 X${c.cx} Y${c.cy} F6000`,'M400','; --- music ---');
+ return [...H,...emit(iv,c),'; --- end ---',`G1 X${c.cx} Y${c.cy} Z${c.zc} F3000`,'M400',
+ `SET_VELOCITY_LIMIT VELOCITY=${P.maxVel} ACCEL=${P.maxAccel} MINIMUM_CRUISE_RATIO=${P.mcr} SQUARE_CORNER_VELOCITY=${P.scv}`].join('\n')+'\n'}
+
+function readCfg(){const n=id=>parseFloat($(id).value);return{speed:n('speed'),tr:n('tr'),cx:n('cx'),cy:n('cy'),half:n('half'),zc:n('zc'),zh:n('zh'),acc:n('acc'),vmax:n('vmax'),sxy:n('sxy'),sz:n('sz'),fmin:n('fmin'),grid:n('grid')/1000,home:$('home').value==='1',mode:$('mode').value}}
+function checkCfg(c){const e=[];if(Object.values(c).some(v=>typeof v==='number'&&!isFinite(v)))e.push('A setting is empty or not a number.');
+ if(c.cx-c.half<P.hard[0]||c.cx+c.half>P.hard[1]||c.cy-c.half<P.hard[0]||c.cy+c.half>P.hard[1])e.push(`XY envelope must stay within ${P.hard[0]}–${P.hard[1]} mm.`);
+ if(c.half<=0)e.push('Half-range must be > 0.');
+ if(c.zc-c.zh<P.zHard[0]||c.zc+c.zh>P.zHard[1]||c.zh<=0)e.push(`Z envelope must stay within ${P.zHard[0]}–${P.zHard[1]} mm.`);
+ if(c.acc<500||c.acc>20000)e.push('Acceleration must be 500–20000 mm/s².');if(c.vmax<20||c.vmax>300)e.push('Max motor speed must be 20–300 mm/s.');
+ if(c.speed<0.1||c.speed>4)e.push('Speed must be 0.1–4×.');if(c.sxy<=0||c.sz<=0||c.fmin<20||c.grid<0.005)e.push('Pitch scale >0, lowest note ≥20 Hz, grid ≥5 ms.');return e}
+
+// Independent check of the generated text (re-parsed, not trusting the generator)
+function validate(t,c){const r={errs:[],n:0,x:[1e9,-1e9],y:[1e9,-1e9],z:[1e9,-1e9],maxF:0,pts:[],per:{}};let p=null;const eps=0.011;
+ for(const l of t.split('\n')){if(!l.startsWith('G1 '))continue;const m={};for(const w of l.slice(3).split(' '))m[w[0]]=parseFloat(w.slice(1));
+  if(m.X!==undefined&&(m.X<P.hard[0]||m.X>P.hard[1]))r.errs.push('X out of hard limits: '+l);
+  if(m.Y!==undefined&&(m.Y<P.hard[0]||m.Y>P.hard[1]))r.errs.push('Y out of hard limits: '+l);
+  if(m.Z!==undefined&&(m.Z<P.zHard[0]||m.Z>P.zHard[1]))r.errs.push('Z out of hard limits: '+l);
+  if(m.X!==undefined&&m.Y!==undefined&&m.Z!==undefined){const n=[m.X,m.Y,m.Z];r.n++;
+   if(Math.abs(n[0]-c.cx)>c.half+eps||Math.abs(n[1]-c.cy)>c.half+eps||Math.abs(n[2]-c.zc)>c.zh+eps)r.errs.push('Outside envelope: '+l);
+   r.x=[Math.min(r.x[0],n[0]),Math.max(r.x[1],n[0])];r.y=[Math.min(r.y[0],n[1]),Math.max(r.y[1],n[1])];r.z=[Math.min(r.z[0],n[2]),Math.max(r.z[1],n[2])];r.pts.push(n);
+   if(p){const dist=Math.hypot(n[0]-p[0],n[1]-p[1],n[2]-p[2]),v=m.F/60;r.maxF=Math.max(r.maxF,v);
+    if(v>P.maxVel)r.errs.push('Over max velocity: '+l);if(dist>0&&v*Math.abs(n[2]-p[2])/dist>P.maxZv)r.errs.push('Over Z velocity: '+l)}
+   p=n}}
+ return r}
+
+function show(text,c,name){const r=validate(text,c),ok=!r.errs.length&&r.n>0;
+ const o=$('out');o.innerHTML=`<p class="${ok?'ok':'bad'}"><b>${ok?'✔ Safety check passed':'✖ Safety check FAILED'}</b> — ${r.n} moves in ${r.x[0]}–${r.x[1]} (X), ${r.y[0]}–${r.y[1]} (Y), ${r.z[0]}–${r.z[1]} (Z); peak toolhead speed ${r.maxF.toFixed(0)} mm/s.</p>`+
+ (r.errs.length?`<p class="bad">${r.errs.slice(0,5).join('<br>')}</p>`:'')+'<canvas id="cv" width="304" height="304"></canvas><p class="m">Bed (152×152) with your envelope and the toolhead path.</p>';
+ const x=$('cv').getContext('2d'),k=2,sx=v=>2+v*k,sy=v=>302-v*k;x.strokeStyle='#888';x.strokeRect(2,2,304-4,304-4);
+ x.strokeStyle='#e0a030';x.strokeRect(sx(c.cx-c.half),sy(c.cy+c.half),2*c.half*k,2*c.half*k);x.strokeStyle='#2563eb';x.lineWidth=.5;x.beginPath();
+ r.pts.slice(0,20000).forEach((q,i)=>i?x.lineTo(sx(q[0]),sy(q[1])):x.moveTo(sx(q[0]),sy(q[1])));x.stroke();
+ const b=document.createElement('button');b.textContent='Download '+name;b.disabled=!ok;b.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download=name;a.click()};
+ const cp=document.createElement('button');cp.className='s';cp.textContent='Copy gcode';cp.disabled=!ok;cp.onclick=()=>navigator.clipboard.writeText(text).then(()=>cp.textContent='Copied');
+ o.append(b,cp)}
+
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{SRC=parseMidi(await f.arrayBuffer())}catch(err){$('finfo').textContent=err.message;return}
+ $('finfo').textContent=`${SRC.length} note sources found`;const sorted=[...SRC].sort((a,b)=>b.notes.length-a.notes.length);
+ for(let i=0;i<3;i++){$('s'+i).innerHTML='<option value="">— silent —</option>'+SRC.map(s=>`<option value="${s.id}">${s.label}</option>`).join('');$('s'+i).value=sorted[i]?sorted[i].id:''}
+ $('gen').disabled=!SRC.length};
+$('gen').onclick=()=>{const c=readCfg(),e=checkCfg(c);if(e.length){$('out').innerHTML='<p class="bad">'+e.join('<br>')+'</p>';return}
+ const tls=[0,1,2].map(i=>{const s=SRC.find(s=>s.id===$('s'+i).value);return s?timeline(s.notes,c,i===2):[]});
+ const iv=merge(tls);if(!iv.length){$('out').innerHTML='<p class="bad">Nothing to play.</p>';return}
+ show(build(iv,c,'MIDI music '+$('file').files[0].name),c,'printer-music.gcode')};
+$('cal').onclick=()=>{const c=readCfg(),e=checkCfg(c);if(e.length){$('out').innerHTML='<p class="bad">'+e.join('<br>')+'</p>';return}
+ const f=parseFloat($('calf').value),iv=[],on=m=>m.map(x=>x?f:0);let t=0;
+ for(const m of [[1,0,0],[0,1,0],[0,0,1],[1,1,1]]){iv.push({t0:t,t1:t+3,f:on(m)});t+=3;iv.push({t0:t,t1:t+1,f:[0,0,0]});t+=1}
+ show(build(iv,c,`Calibration tones ${f} Hz: A, B, Z, then all`),c,'calibration.gcode')};
+</script></body></html>
