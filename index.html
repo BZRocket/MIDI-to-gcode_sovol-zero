@@ -1,19 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MIDI → Printer Gcode (Sovol Zero)</title>
-<style>
-:root{--bg:#fff;--fg:#1c1c1e;--mut:#6b6b70;--card:#f4f4f6;--bd:#d8d8de;--ac:#2563eb;--bad:#c62828;--ok:#2e7d32}
-@media(prefers-color-scheme:dark){:root{--bg:#18181b;--fg:#ececf0;--mut:#9a9aa3;--card:#232328;--bd:#3a3a42;--ac:#6ea0ff;--bad:#ff6b6b;--ok:#6fcf80}}
-body{font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:960px;margin:0 auto;padding:16px}
-h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin:12px 0}
-.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px 14px}
-label{display:flex;flex-direction:column;font-size:12px;color:var(--mut)}
-input,select,button{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg)}
-button{background:var(--ac);color:#fff;border:0;cursor:pointer;margin:4px 6px 4px 0}button.s{background:var(--bd);color:var(--fg)}button:disabled{opacity:.4;cursor:not-allowed}
-.row{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center;margin:6px 0}
-.bad{color:var(--bad)}.ok{color:var(--ok)}.m{color:var(--mut);font-size:12px}canvas{border:1px solid var(--bd);border-radius:8px;background:var(--bg);max-width:100%}
-</style></head><body>
+<link rel="stylesheet" href="style.css"></head><body>
 <h1>MIDI → Printer Gcode <span class="m">Sovol Zero (Klipper, CoreXY)</span></h1>
 <p class="m">Each motor plays one monophonic line: Motor A (stepper_x), Motor B (stepper_y), Z motor. Runs fully offline in your browser.</p>
 
@@ -44,12 +32,13 @@ button{background:var(--ac);color:#fff;border:0;cursor:pointer;margin:4px 6px 4p
 <p class="m">Pitch scale defaults = rotation_distance ÷ 200 full steps (0.2 mm; Z 0.02 mm). Use the calibration tones to check by ear and tune. Notes outside a motor's range are folded by octaves.</p></div>
 
 <div class="card"><h2>4 · Generate</h2>
-<button id="gen" disabled>Generate gcode</button><label style="display:inline-flex;vertical-align:middle">Cal. tone Hz<input id="calf" type="number" value="440" style="width:90px"></label>
+<button id="gen" disabled>Generate gcode</button><label class="inline">Cal. tone Hz<input id="calf" type="number" value="440"></label>
 <button id="cal" class="s">Calibration tones (A, B, Z, all)</button>
 <div id="out"></div></div>
 
 <script>
 const $=id=>document.getElementById(id);
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim()||'#888';
 const P={maxVel:1200,maxAccel:40000,mcr:0.5,scv:5,maxZv:20,hard:[15,137],zHard:[10,100]}; // from printer.cfg + hard safety margins
 let SRC=[],G='';
 const hz=k=>440*2**((k-69)/12);
@@ -133,8 +122,8 @@ function validate(t,c){const r={errs:[],n:0,x:[1e9,-1e9],y:[1e9,-1e9],z:[1e9,-1e
 function show(text,c,name){const r=validate(text,c),ok=!r.errs.length&&r.n>0;
  const o=$('out');o.innerHTML=`<p class="${ok?'ok':'bad'}"><b>${ok?'✔ Safety check passed':'✖ Safety check FAILED'}</b> — ${r.n} moves in ${r.x[0]}–${r.x[1]} (X), ${r.y[0]}–${r.y[1]} (Y), ${r.z[0]}–${r.z[1]} (Z); peak toolhead speed ${r.maxF.toFixed(0)} mm/s.</p>`+
  (r.errs.length?`<p class="bad">${r.errs.slice(0,5).join('<br>')}</p>`:'')+'<canvas id="cv" width="304" height="304"></canvas><p class="m">Bed (152×152) with your envelope and the toolhead path.</p>';
- const x=$('cv').getContext('2d'),k=2,sx=v=>2+v*k,sy=v=>302-v*k;x.strokeStyle='#888';x.strokeRect(2,2,304-4,304-4);
- x.strokeStyle='#e0a030';x.strokeRect(sx(c.cx-c.half),sy(c.cy+c.half),2*c.half*k,2*c.half*k);x.strokeStyle='#2563eb';x.lineWidth=.5;x.beginPath();
+ const x=$('cv').getContext('2d'),k=2,sx=v=>2+v*k,sy=v=>302-v*k;x.strokeStyle=css('--bed-line');x.strokeRect(2,2,304-4,304-4);
+ x.strokeStyle=css('--envelope-line');x.strokeRect(sx(c.cx-c.half),sy(c.cy+c.half),2*c.half*k,2*c.half*k);x.strokeStyle=css('--path-line');x.lineWidth=.5;x.beginPath();
  r.pts.slice(0,20000).forEach((q,i)=>i?x.lineTo(sx(q[0]),sy(q[1])):x.moveTo(sx(q[0]),sy(q[1])));x.stroke();
  const b=document.createElement('button');b.textContent='Download '+name;b.disabled=!ok;b.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download=name;a.click()};
  const cp=document.createElement('button');cp.className='s';cp.textContent='Copy gcode';cp.disabled=!ok;cp.onclick=()=>navigator.clipboard.writeText(text).then(()=>cp.textContent='Copied');
