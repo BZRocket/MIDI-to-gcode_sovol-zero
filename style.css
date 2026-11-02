@@ -1,81 +1,55 @@
 /* ==========================================================
    MIDI → Printer Gcode : theme file
-   Edit the values in the two blocks below. Everything else
+   Edit the values in the block below. Everything else
    in this file just uses these variables.
    ========================================================== */
 
-/* ---------- LIGHT THEME (default) ---------- */
+/* ---------- THEME (always dark) ---------- */
 :root {
+  color-scheme: dark;          /* makes scrollbars and form controls dark too */
+
   /* Page */
-  --page-bg:        #ffffff;   /* page background */
-  --text:           #1c1c1e;   /* main text */
-  --text-muted:     #6b6b70;   /* labels, hints, small print */
+  --page-bg:        #18181b;   /* page background */
+  --text:           #ececf0;   /* main text */
+  --text-muted:     #9a9aa3;   /* labels, hints, small print */
   --font:           system-ui, sans-serif;
   --font-size:      14px;
   --page-width:     960px;     /* max width of the content column */
 
-  /* Cards (the grey boxes for each step) */
-  --card-bg:        #f4f4f6;
-  --card-border:    #d8d8de;
+  /* Cards (the boxes for each step) */
+  --card-bg:        #232328;
+  --card-border:    #3a3a42;
   --card-radius:    10px;
 
   /* Section headings (“1 · MIDI FILE” etc.) */
-  --heading:        #6b6b70;
+  --heading:        #9a9aa3;
 
   /* Main buttons (Generate, Download) */
-  --btn-bg:         #2563eb;
-  --btn-text:       #ffffff;
-  --btn-hover-bg:   #1d4fc4;
+  --btn-bg:         #6ea0ff;
+  --btn-text:       #101014;
+  --btn-hover-bg:   #8fb5ff;
 
   /* Secondary buttons (Calibration, Copy) */
-  --btn2-bg:        #d8d8de;
-  --btn2-text:      #1c1c1e;
-  --btn2-hover-bg:  #c4c4cc;
+  --btn2-bg:        #3a3a42;
+  --btn2-text:      #ececf0;
+  --btn2-hover-bg:  #4a4a54;
 
   /* Inputs and dropdowns */
-  --input-bg:       #ffffff;
-  --input-text:     #1c1c1e;
-  --input-border:   #d8d8de;
+  --input-bg:       #18181b;
+  --input-text:     #ececf0;
+  --input-border:   #3a3a42;
   --input-radius:   6px;
-  --focus-ring:     #2563eb;
+  --focus-ring:     #6ea0ff;
 
   /* Status messages */
-  --ok:             #2e7d32;   /* "Safety check passed" */
-  --bad:            #c62828;   /* errors / "FAILED" */
+  --ok:             #6fcf80;   /* "Safety check passed" */
+  --bad:            #ff6b6b;   /* errors / "FAILED" */
 
   /* Bed preview canvas */
-  --canvas-bg:      #ffffff;
-  --bed-line:       #888888;   /* bed outline */
+  --canvas-bg:      #18181b;
+  --bed-line:       #9a9aa3;   /* bed outline */
   --envelope-line:  #e0a030;   /* your XY safe-range box */
-  --path-line:      #2563eb;   /* toolhead path */
-}
-
-/* ---------- DARK THEME (used when the device is in dark mode) ---------- */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page-bg:        #000000;
-    --text:           #ececf0;
-    --text-muted:     #9a9aa3;
-    --card-bg:        #232328;
-    --card-border:    #3a3a42;
-    --heading:        #9a9aa3;
-    --btn-bg:         #6ea0ff;
-    --btn-text:       #101014;
-    --btn-hover-bg:   #8fb5ff;
-    --btn2-bg:        #3a3a42;
-    --btn2-text:      #ececf0;
-    --btn2-hover-bg:  #4a4a54;
-    --input-bg:       #18181b;
-    --input-text:     #ececf0;
-    --input-border:   #3a3a42;
-    --focus-ring:     #6ea0ff;
-    --ok:             #6fcf80;
-    --bad:            #ff6b6b;
-    --canvas-bg:      #18181b;
-    --bed-line:       #9a9aa3;
-    --envelope-line:  #e0a030;
-    --path-line:      #6ea0ff;
-  }
+  --path-line:      #6ea0ff;   /* toolhead path */
 }
 
 /* ==========================================================
