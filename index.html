@@ -83,7 +83,7 @@ function timeline(notes,c,z){const sc=z?c.sz:c.sxy,fmax=z?0.9*P.maxZv/c.sz:c.vma
   let f=0;if(act.length){let b=act[0];for(const n of act)if(c.mode==='high'?n.f>b.f:c.mode==='low'?n.f<b.f:n.s>=b.s)b=n;f=b.f}
   out.push({t0:t,t1:bs[k+1],f})}
  return out}
-function merge(tls){const bs=[...new Set([0,...tls.flatMap(t=>t.flatMap(s=>[s.t0,s.t1]))])].sort((a,b)=>a-b),ptr=[0,0,0],iv=[];
+function merge(tls){const bs=[...new Set([...tls.flatMap(t=>t.flatMap(s=>[s.t0,s.t1]))])].sort((a,b)=>a-b),ptr=[0,0,0],iv=[];
  for(let k=0;k<bs.length-1;k++){const t0=bs[k],t1=bs[k+1],m=(t0+t1)/2;
   iv.push({t0,t1,f:tls.map((tl,i)=>{while(ptr[i]<tl.length&&tl[ptr[i]].t1<=m)ptr[i]++;const s=tl[ptr[i]];return s&&s.t0<=m?s.f:0})})}
  return iv}
@@ -105,7 +105,7 @@ function build(iv,c,title){const H=['; '+title,'; Sovol Zero / Klipper. No heate
  `; Envelope X ${c.cx-c.half}..${c.cx+c.half} Y ${c.cy-c.half}..${c.cy+c.half} Z ${c.zc-c.zh}..${c.zc+c.zh}`,'G90'];
  if(c.home)H.push('G28');
  H.push(`SET_VELOCITY_LIMIT VELOCITY=${Math.round(c.vmax*1.2)} ACCEL=${c.acc}`,`G1 Z${c.zc} F600`,`G1 X${c.cx} Y${c.cy} F6000`,'M400','; --- music ---');
- return [...H,...emit(iv,c),'; --- end ---',`G1 X${c.cx} Y${c.cy} Z${c.zc} F3000`,'M400',
+ return [...H,...emit(iv,c),'; --- end ---','M400',
  `SET_VELOCITY_LIMIT VELOCITY=${P.maxVel} ACCEL=${P.maxAccel} MINIMUM_CRUISE_RATIO=${P.mcr} SQUARE_CORNER_VELOCITY=${P.scv}`].join('\n')+'\n'}
 
 function readCfg(){const n=id=>parseFloat($(id).value);return{speed:n('speed'),tr:n('tr'),cx:n('cx'),cy:n('cy'),half:n('half'),zc:n('zc'),zh:n('zh'),acc:n('acc'),vmax:n('vmax'),sxy:n('sxy'),sz:n('sz'),fmin:n('fmin'),grid:n('grid')/1000,home:$('home').value==='1',mode:$('mode').value}}
