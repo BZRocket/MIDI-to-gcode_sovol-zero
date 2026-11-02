@@ -1,0 +1,140 @@
+/* ==========================================================
+   MIDI → Printer Gcode : theme file
+   Edit the values in the two blocks below. Everything else
+   in this file just uses these variables.
+   ========================================================== */
+
+/* ---------- LIGHT THEME (default) ---------- */
+:root {
+  /* Page */
+  --page-bg:        #ffffff;   /* page background */
+  --text:           #1c1c1e;   /* main text */
+  --text-muted:     #6b6b70;   /* labels, hints, small print */
+  --font:           system-ui, sans-serif;
+  --font-size:      14px;
+  --page-width:     960px;     /* max width of the content column */
+
+  /* Cards (the grey boxes for each step) */
+  --card-bg:        #f4f4f6;
+  --card-border:    #d8d8de;
+  --card-radius:    10px;
+
+  /* Section headings (“1 · MIDI FILE” etc.) */
+  --heading:        #6b6b70;
+
+  /* Main buttons (Generate, Download) */
+  --btn-bg:         #2563eb;
+  --btn-text:       #ffffff;
+  --btn-hover-bg:   #1d4fc4;
+
+  /* Secondary buttons (Calibration, Copy) */
+  --btn2-bg:        #d8d8de;
+  --btn2-text:      #1c1c1e;
+  --btn2-hover-bg:  #c4c4cc;
+
+  /* Inputs and dropdowns */
+  --input-bg:       #ffffff;
+  --input-text:     #1c1c1e;
+  --input-border:   #d8d8de;
+  --input-radius:   6px;
+  --focus-ring:     #2563eb;
+
+  /* Status messages */
+  --ok:             #2e7d32;   /* "Safety check passed" */
+  --bad:            #c62828;   /* errors / "FAILED" */
+
+  /* Bed preview canvas */
+  --canvas-bg:      #ffffff;
+  --bed-line:       #888888;   /* bed outline */
+  --envelope-line:  #e0a030;   /* your XY safe-range box */
+  --path-line:      #2563eb;   /* toolhead path */
+}
+
+/* ---------- DARK THEME (used when the device is in dark mode) ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg:        #18181b;
+    --text:           #ececf0;
+    --text-muted:     #9a9aa3;
+    --card-bg:        #232328;
+    --card-border:    #3a3a42;
+    --heading:        #9a9aa3;
+    --btn-bg:         #6ea0ff;
+    --btn-text:       #101014;
+    --btn-hover-bg:   #8fb5ff;
+    --btn2-bg:        #3a3a42;
+    --btn2-text:      #ececf0;
+    --btn2-hover-bg:  #4a4a54;
+    --input-bg:       #18181b;
+    --input-text:     #ececf0;
+    --input-border:   #3a3a42;
+    --focus-ring:     #6ea0ff;
+    --ok:             #6fcf80;
+    --bad:            #ff6b6b;
+    --canvas-bg:      #18181b;
+    --bed-line:       #9a9aa3;
+    --envelope-line:  #e0a030;
+    --path-line:      #6ea0ff;
+  }
+}
+
+/* ==========================================================
+   Layout and components (you usually don't need to touch this)
+   ========================================================== */
+body {
+  font: var(--font-size)/1.45 var(--font);
+  background: var(--page-bg);
+  color: var(--text);
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: 16px;
+}
+h1 { font-size: 20px; margin: 0 0 4px; }
+h2 {
+  font-size: 14px; margin: 0 0 8px;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--heading);
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.g { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 14px; }
+.row { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; margin: 6px 0; }
+
+label { display: flex; flex-direction: column; font-size: 12px; color: var(--text-muted); }
+label.inline { display: inline-flex; vertical-align: middle; }
+label.inline input { width: 90px; }
+
+input, select, button {
+  font: inherit; padding: 6px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: var(--input-radius);
+  background: var(--input-bg);
+  color: var(--input-text);
+}
+input:focus, select:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+button {
+  background: var(--btn-bg); color: var(--btn-text);
+  border: 0; cursor: pointer; margin: 4px 6px 4px 0;
+}
+button:hover:not(:disabled) { background: var(--btn-hover-bg); }
+button.s { background: var(--btn2-bg); color: var(--btn2-text); }
+button.s:hover:not(:disabled) { background: var(--btn2-hover-bg); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+
+.ok  { color: var(--ok); }
+.bad { color: var(--bad); }
+.m   { color: var(--text-muted); font-size: 12px; }
+
+canvas {
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--canvas-bg);
+  max-width: 100%;
+}
