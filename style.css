@@ -53,7 +53,7 @@
 /* ---------- DARK THEME (used when the device is in dark mode) ---------- */
 @media (prefers-color-scheme: dark) {
   :root {
-    --page-bg:        #ffffff;
+    --page-bg:        #000000;
     --text:           #ececf0;
     --text-muted:     #9a9aa3;
     --card-bg:        #232328;
